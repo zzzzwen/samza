@@ -2,6 +2,7 @@ package org.apache.samza.job.dm;
 
 import org.apache.hadoop.yarn.api.records.Resource;
 import org.apache.samza.config.Config;
+import org.apache.samza.config.DMSchedulerConfig;
 
 /**
  *  Decision Maker scheduler
@@ -10,7 +11,7 @@ public interface DMScheduler {
     /**
      * start the scheduler
      */
-    void init(Config config);
+    void init(Config config, DMSchedulerConfig schedulerConfig);
 
     /**
      * submit the application to the cluster, this function is called once when job is submitted

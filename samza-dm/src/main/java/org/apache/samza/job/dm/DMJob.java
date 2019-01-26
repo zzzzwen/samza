@@ -1,6 +1,7 @@
 package org.apache.samza.job.dm;
 
 import org.apache.samza.config.Config;
+import org.apache.samza.config.DMSchedulerConfig;
 import org.apache.samza.job.ApplicationStatus;
 import org.apache.samza.job.StreamJob;
 
@@ -14,8 +15,9 @@ public class DMJob implements StreamJob {
 
     @Override
     public StreamJob submit() {
-        DMScheduler scheduler = getDMScheduler();
-        scheduler.init(config);
+        DMSchedulerConfig schedulerConfig = new DMSchedulerConfig(config);
+        DMScheduler scheduler = getDMScheduler(schedulerConfig.getSchedulerClass());
+        scheduler.init(config, schedulerConfig);
         scheduler.submitApplication();
         return this;
     }
@@ -40,11 +42,7 @@ public class DMJob implements StreamJob {
         return ApplicationStatus.Running;
     }
 
-    private DMScheduler getDMScheduler() {
-        String DMSchedulerClass = "DefaultScheduler";
-        if (config.containsKey("dm.scheduler.class")) {
-            DMSchedulerClass = config.get("dm.scheduler.class", "DefaultScheduler");
-        }
+    private DMScheduler getDMScheduler(String DMSchedulerClass) {
         DMScheduler scheduler = null;
         try {
             scheduler = (DMScheduler) Class.forName(DMSchedulerClass).newInstance();

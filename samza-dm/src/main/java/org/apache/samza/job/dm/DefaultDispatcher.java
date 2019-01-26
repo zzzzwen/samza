@@ -1,6 +1,7 @@
 package org.apache.samza.job.dm;
 
 import org.apache.samza.config.Config;
+import org.apache.samza.config.DMDispatcherConfig;
 
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ConcurrentSkipListMap;
@@ -11,10 +12,12 @@ public class DefaultDispatcher implements DMDispatcher {
 
     private ConcurrentMap<String, Enforcer> enforcers;
     private Config config;
+    private DMDispatcherConfig dispatcherConfig;
 
     @Override
     public void init(Config config) {
         this.config = config;
+        this.dispatcherConfig = new DMDispatcherConfig(config);
         this.enforcers = new ConcurrentSkipListMap<String, Enforcer>();
     }
 
