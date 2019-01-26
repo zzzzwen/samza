@@ -44,7 +44,7 @@ public interface DMScheduler {
     /**
      * set the dispatcher
      */
-    DMDispatcher getDispatcher();
+    DMDispatcher getDispatcher(String dispatcherClass);
 
     /**
      * dispatch the schema to the enforcer

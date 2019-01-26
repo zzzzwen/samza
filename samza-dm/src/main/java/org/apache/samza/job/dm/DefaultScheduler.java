@@ -18,7 +18,6 @@ public class DefaultScheduler implements DMScheduler {
     private ConcurrentMap<String, Stage> stages;
 
     private DMDispatcher dispatcher;
-    private DMDispatcherConfig dispatcherConfig;
 
     @Override
     public void init(Config config, DMSchedulerConfig schedulerConfig) {
@@ -27,8 +26,8 @@ public class DefaultScheduler implements DMScheduler {
 
         this.stages = new ConcurrentSkipListMap<>();
 
-        this.dispatcherConfig = new DMDispatcherConfig(config);
-        this.dispatcher = getDispatcher();
+        DMDispatcherConfig dispatcherConfig = new DMDispatcherConfig(config);
+        this.dispatcher = getDispatcher(dispatcherConfig.getDispatcherClass());
         this.dispatcher.init(config);
     }
 
@@ -56,9 +55,8 @@ public class DefaultScheduler implements DMScheduler {
     }
 
     @Override
-    public DMDispatcher getDispatcher() {
+    public DMDispatcher getDispatcher(String DMDispatcherClass) {
         LOG.info("scheduler getdispatcher");
-        String DMDispatcherClass = this.dispatcherConfig.getDispatcherClass();
         DMDispatcher dispatcher = null;
         try {
             dispatcher = (DMDispatcher) Class.forName(DMDispatcherClass).newInstance();
