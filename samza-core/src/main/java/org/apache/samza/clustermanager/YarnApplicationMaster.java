@@ -179,13 +179,13 @@ public class YarnApplicationMaster {
             JobModel jobModel = jobModelManager.jobModel();
             while (!containerProcessManager.shouldShutdown() && !checkAndThrowException() && !isInterrupted) {
                 try {
-                    counter++;
+//                    counter++;
                     Thread.sleep(jobCoordinatorSleepInterval);
-                    if(counter == 120){
-                        counter = 0;
-                        jobModel = scaleUpByOne(jobModel);
-                        leaderJobCoordinator.publishJobModel(jobModel);
-                    }
+//                    if(counter == 120){
+//                        counter = 0;
+//                        jobModel = scaleUpByOne(jobModel);
+//                        leaderJobCoordinator.publishJobModel(jobModel);
+//                    }
                 } catch (InterruptedException e) {
                     isInterrupted = true;
                     log.error("Interrupted in AM loop {} ", e);
