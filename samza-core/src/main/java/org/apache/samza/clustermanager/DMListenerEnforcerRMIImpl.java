@@ -1,8 +1,13 @@
 package org.apache.samza.clustermanager;
 
 import java.rmi.RemoteException;
+import java.rmi.server.UnicastRemoteObject;
 
-public class DMListenerEnforcerRMIImpl implements DMListenerEnforcer {
+public class DMListenerEnforcerRMIImpl extends UnicastRemoteObject implements DMListenerEnforcer {
+
+    DMListenerEnforcerRMIImpl() throws RemoteException{
+        super();
+    }
 
     @Override
     public void enforceSchema(int parallelism) throws RemoteException {

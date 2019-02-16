@@ -52,6 +52,8 @@ public class DefaultScheduler implements DMScheduler {
         // Use default schema to launch the application
         Allocation defaultAllocation = getDefaultAllocation("stage0");
         dispatcher.submitApplication(defaultAllocation);
+
+
     }
 
     @Override

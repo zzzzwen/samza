@@ -1,11 +1,18 @@
 package org.apache.samza.job.dm;
 
+import org.apache.samza.clustermanager.DMListenerEnforcer;
 import org.apache.samza.config.Config;
 import org.apache.samza.config.DMDispatcherConfig;
 
+import java.rmi.NotBoundException;
+import java.rmi.RemoteException;
+import java.rmi.registry.LocateRegistry;
+import java.rmi.registry.Registry;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.logging.Logger;
+
+//import org.apache.xmlrpc.*;
 
 public class DefaultDispatcher implements DMDispatcher {
     private static final Logger LOG = Logger.getLogger(DefaultDispatcher.class.getName());
@@ -50,9 +57,26 @@ public class DefaultDispatcher implements DMDispatcher {
     public void enforceSchema(Allocation allocation) {
         // TODO: apply schema to the Enforcer;
         LOG.info("dispatcher enforce schema");
-        String stageId = allocation.getStageID();
-        Enforcer enf = getEnforcer(stageId);
-        enf.updateSchema(allocation);
+
+        // implementation for RMI based
+        try {
+            String name = "RMI-Enforcer";
+            Registry registry = LocateRegistry.getRegistry("localhost");
+            DMListenerEnforcer enforcer = (DMListenerEnforcer) registry.lookup(name);
+
+            enforcer.enforceSchema(allocation.getParallelism());
+
+        } catch (RemoteException e) {
+            e.printStackTrace();
+        } catch (NotBoundException e) {
+            e.printStackTrace();
+        }
+
+        // -----------------------------
+
+//        String stageId = allocation.getStageID();
+//        Enforcer enf = getEnforcer(stageId);
+//        enf.updateSchema(allocation);
     }
 
     @Override
@@ -63,5 +87,9 @@ public class DefaultDispatcher implements DMDispatcher {
         Enforcer enf = enfFac.getEnforcer(config);
         enforcers.put(stageId, enf);
         enf.submit();
+    }
+
+    public void startListener() {
+
     }
 }
