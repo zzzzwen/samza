@@ -1,5 +1,6 @@
 package org.apache.samza.job.dm;
 
+import org.apache.commons.logging.Log;
 import org.apache.hadoop.yarn.api.records.Resource;
 import org.apache.samza.config.Config;
 import org.apache.samza.config.DMDispatcherConfig;
@@ -43,7 +44,19 @@ public class DefaultScheduler implements DMScheduler {
 
     @Override
     public void createListener(DMScheduler scheduler) {
-    	//TODO: create listener to listen to the update of resource and workload from monitor
+        LOG.info("starting listener in scheduler");
+        String listenerClass = this.schedulerConfig.getSchedulerListenerClass();
+        try {
+            DMSchedulerListener listener = (DMSchedulerListener) Class.forName(listenerClass).newInstance();
+            listener.setScheduler(this);
+            listener.startListener();
+        } catch (InstantiationException e) {
+            e.printStackTrace();
+        } catch (IllegalAccessException e) {
+            e.printStackTrace();
+        } catch (ClassNotFoundException e) {
+            e.printStackTrace();
+        }
     }
 
     @Override
@@ -52,7 +65,6 @@ public class DefaultScheduler implements DMScheduler {
         // Use default schema to launch the application
         Allocation defaultAllocation = getDefaultAllocation("stage0");
         dispatcher.submitApplication(defaultAllocation);
-
 
     }
 
