@@ -188,7 +188,7 @@ public class ClusterBasedJobCoordinator {
       log.info("Starting Cluster Based Job Coordinator");
 
       // init and start the listener
-      DMListener listener = new DMRMIListener();
+      DMListener listener = new DMListenerRMI();
       listener.startListener();
 
       containerProcessManager.start();
