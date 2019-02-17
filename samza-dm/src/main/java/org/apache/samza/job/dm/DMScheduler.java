@@ -52,4 +52,10 @@ public interface DMScheduler {
      * @param allocation
      */
     void dispatch(Allocation allocation);
+
+    /**
+     * update relevant workload and cluster resource information for the stages
+     * @param data the data from monitor(use String tentatively)
+     */
+    void updateStage(String data);
 }

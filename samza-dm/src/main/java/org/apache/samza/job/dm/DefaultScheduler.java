@@ -5,6 +5,7 @@ import org.apache.hadoop.yarn.api.records.Resource;
 import org.apache.samza.config.Config;
 import org.apache.samza.config.DMDispatcherConfig;
 import org.apache.samza.config.DMSchedulerConfig;
+import org.apache.samza.job.ApplicationStatus;
 
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ConcurrentSkipListMap;
@@ -65,7 +66,6 @@ public class DefaultScheduler implements DMScheduler {
         // Use default schema to launch the application
         Allocation defaultAllocation = getDefaultAllocation("stage0");
         dispatcher.submitApplication(defaultAllocation);
-
     }
 
     @Override
@@ -87,5 +87,23 @@ public class DefaultScheduler implements DMScheduler {
     @Override
     public void dispatch(Allocation allocation) {
         dispatcher.enforceSchema(allocation);
+    }
+
+    @Override
+    public void updateStage(String data) {
+        // dataset can be in the format of String, JSON, XML, currently use String tentatively
+
+        String[] dataSet = data.split(",");
+
+        Stage curr = stages.get(dataSet[0]);
+
+        // update the url and port of listener to dispatcher at the first start up
+        if (!curr.getStatus().equals(ApplicationStatus.Running)) {
+            this.dispatcher.updateEnforcerURL(dataSet[1], dataSet[2]);
+        }
+
+        curr.bulkUpdate(dataSet);
+
+        // TODO: add mechanism to trigger scheduling
     }
 }

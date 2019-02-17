@@ -37,4 +37,8 @@ public interface DMDispatcher {
      */
     void submitApplication(Allocation allocation);
 
+    /**
+     * update enforcer info from the heartbeat of monitor
+     */
+    void updateEnforcerURL(String url, String port);
 }
