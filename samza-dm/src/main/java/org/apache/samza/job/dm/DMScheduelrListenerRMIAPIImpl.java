@@ -3,10 +3,10 @@ package org.apache.samza.job.dm;
 import java.rmi.RemoteException;
 import java.rmi.server.UnicastRemoteObject;
 
-public class DMScheduelrListenerAPIImpl extends UnicastRemoteObject implements DMSchedulerListenerAPI {
+public class DMScheduelrListenerRMIAPIImpl extends UnicastRemoteObject implements DMSchedulerListenerRMIAPI {
     DMScheduler scheduler;
 
-    protected DMScheduelrListenerAPIImpl(DMScheduler scheduler) throws RemoteException {
+    protected DMScheduelrListenerRMIAPIImpl(DMScheduler scheduler) throws RemoteException {
         this.scheduler = scheduler;
     }
 

@@ -22,9 +22,9 @@
 # Set container name system properties for use in Log4J
 [[ $JAVA_OPTS != *-Dsamza.container.name* ]] && export JAVA_OPTS="$JAVA_OPTS -Dsamza.container.name=samza-job-coordinator"
 
-$(dirname $0)/run-rmiserver.sh
+#$(dirname $0)/run-rmiserver.sh
 
-echo "starting clusterbasedjobcoordinator"
+#echo "starting clusterbasedjobcoordinator"
 
-#exec $(dirname $0)/run-class.sh org.apache.samza.clustermanager.YarnApplicationMaster "$@"
-exec $(dirname $0)/run-class.sh org.apache.samza.clustermanager.ClusterBasedJobCoordinator "$@"
+exec $(dirname $0)/run-class.sh org.apache.samza.clustermanager.YarnApplicationMaster "$@"
+#exec $(dirname $0)/run-class.sh org.apache.samza.clustermanager.ClusterBasedJobCoordinator "$@"

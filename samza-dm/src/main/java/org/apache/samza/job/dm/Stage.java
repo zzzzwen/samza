@@ -5,6 +5,7 @@ import org.apache.samza.job.ApplicationStatus;
 public class Stage {
     private String name;
     private int id;
+    private int runningContainers;
 
     private ApplicationStatus status;
 
@@ -34,6 +35,14 @@ public class Stage {
 
     public void bulkUpdate(String[] data){
         // TODO: split data and update relevant field
+    }
+
+    public int getRunningContainers() {
+        return runningContainers;
+    }
+
+    public void setRunningContainers(int runningContainers) {
+        this.runningContainers = runningContainers;
     }
 
     // TODO: add properties for input/output stream

@@ -13,4 +13,9 @@ public interface DMListener {
      * Opens port and listen to the update schema call from dispatcher
      */
     void startListener();
+
+    /**
+     * set the yarnapplicationmaster
+     */
+    void setYarnApplicationMaster(YarnApplicationMaster jc);
 }

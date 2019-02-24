@@ -1,13 +1,11 @@
 package org.apache.samza.job.dm;
 
-import org.apache.samza.clustermanager.DMListenerEnforcer;
-import org.apache.samza.clustermanager.DMListenerEnforcerRMIImpl;
-
 import java.net.MalformedURLException;
 import java.rmi.Naming;
 import java.rmi.RemoteException;
+import java.rmi.registry.LocateRegistry;
 
-public class DMSchedulerListenerImpl implements DMSchedulerListener, Runnable {
+public class DMSchedulerListenerRMIImpl implements DMSchedulerListener, Runnable {
 
     DMScheduler scheduler;
 
@@ -25,7 +23,8 @@ public class DMSchedulerListenerImpl implements DMSchedulerListener, Runnable {
     @Override
     public void run() {
         try {
-            DMSchedulerListenerAPI listener = new DMScheduelrListenerAPIImpl(scheduler);
+            DMSchedulerListenerRMIAPI listener = new DMScheduelrListenerRMIAPIImpl(scheduler);
+            LocateRegistry.createRegistry(2000);
             Naming.rebind("rmi://127.0.0.1:2000/listener", listener);
 
         } catch (RemoteException e) {

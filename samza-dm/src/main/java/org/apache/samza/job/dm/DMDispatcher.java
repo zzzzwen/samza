@@ -40,5 +40,5 @@ public interface DMDispatcher {
     /**
      * update enforcer info from the heartbeat of monitor
      */
-    void updateEnforcerURL(String url, String port);
+    void updateEnforcerURL(String name, String url);
 }

@@ -4,6 +4,8 @@ import org.apache.samza.clustermanager.DMListenerEnforcer;
 import org.apache.samza.config.Config;
 import org.apache.samza.config.DMDispatcherConfig;
 
+import java.net.MalformedURLException;
+import java.rmi.Naming;
 import java.rmi.NotBoundException;
 import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
@@ -18,6 +20,7 @@ public class DefaultDispatcher implements DMDispatcher {
     private static final Logger LOG = Logger.getLogger(DefaultDispatcher.class.getName());
 
     private ConcurrentMap<String, Enforcer> enforcers;
+    private ConcurrentMap<String, String> enforcerURL;
     private Config config;
     private DMDispatcherConfig dispatcherConfig;
 
@@ -26,6 +29,7 @@ public class DefaultDispatcher implements DMDispatcher {
         this.config = config;
         this.dispatcherConfig = new DMDispatcherConfig(config);
         this.enforcers = new ConcurrentSkipListMap<String, Enforcer>();
+        this.enforcerURL = new ConcurrentSkipListMap<String, String>();
     }
 
     @Override
@@ -60,18 +64,16 @@ public class DefaultDispatcher implements DMDispatcher {
 
         // implementation for RMI based
         try {
-            String name = "RMI-Enforcer";
-            Registry registry = LocateRegistry.getRegistry("localhost");
-            DMListenerEnforcer enforcer = (DMListenerEnforcer) registry.lookup(name);
-
+            String url = enforcerURL.get(allocation.getStageID());
+            DMListenerEnforcer enforcer = (DMListenerEnforcer) Naming.lookup("rmi://" + url + "/listener");
             enforcer.enforceSchema(allocation.getParallelism());
-
         } catch (RemoteException e) {
             e.printStackTrace();
         } catch (NotBoundException e) {
             e.printStackTrace();
+        } catch (MalformedURLException e) {
+            e.printStackTrace();
         }
-
         // -----------------------------
 
 //        String stageId = allocation.getStageID();
@@ -89,8 +91,9 @@ public class DefaultDispatcher implements DMDispatcher {
         enf.submit();
     }
 
-    public void updateEnforcerURL(String url, String port) {
+    public void updateEnforcerURL(String name, String url) {
         // TODO: update the Enforcer URL for later use of updateing paralellism
+        enforcerURL.put(name, url);
     }
 
 }

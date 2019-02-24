@@ -64,8 +64,12 @@ public class DefaultScheduler implements DMScheduler {
     public void submitApplication() {
         LOG.info("scheduler submit application");
         // Use default schema to launch the application
-        Allocation defaultAllocation = getDefaultAllocation("stage0");
+        Allocation defaultAllocation = getDefaultAllocation(config.get("job.name"));
         dispatcher.submitApplication(defaultAllocation);
+
+        // for kafka listener
+        createListener(this);
+        while (true) {}
     }
 
     @Override
@@ -90,20 +94,29 @@ public class DefaultScheduler implements DMScheduler {
     }
 
     @Override
-    public void updateStage(String data) {
+    public void updateStage(StageReport report) {
         // dataset can be in the format of String, JSON, XML, currently use String tentatively
 
-        String[] dataSet = data.split(",");
-
-        Stage curr = stages.get(dataSet[0]);
-
         // update the url and port of listener to dispatcher at the first start up
-        if (!curr.getStatus().equals(ApplicationStatus.Running)) {
-            this.dispatcher.updateEnforcerURL(dataSet[1], dataSet[2]);
+        if (report.getType().equals("ApplicationMaster")) {
+            if (!stages.containsKey(report.getName())) {
+                LOG.info("creating new stage for application master");
+                stages.put(report.getName(), new Stage());
+            }
+            Stage curr = stages.get(report.getName());
+            curr.setRunningContainers(report.getRunningContainers());
+            this.dispatcher.updateEnforcerURL(report.getName(), report.getHost()+ ":1999");
+        } else {
+            Stage curr = stages.get(report.getName());
+            if (report.getType().contains("TaskName-Partition")) {
+                if (report.getThroughput() > 5 && curr.getRunningContainers() == 1) {
+                    LOG.info("Requesting scaling of containers");
+//                    this.dispatcher.enforceSchema(new Allocation(report.getName(), stages.get(report.getName()).getRunningContainers() +1));
+                    this.dispatcher.enforceSchema(new Allocation(report.getName(), 1));
+                }
+            }
         }
 
-        curr.bulkUpdate(dataSet);
-
-        // TODO: add mechanism to trigger scheduling
+         // TODO: add mechanism to trigger scheduling
     }
 }

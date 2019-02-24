@@ -3,8 +3,11 @@ package org.apache.samza.clustermanager;
 import java.net.MalformedURLException;
 import java.rmi.Naming;
 import java.rmi.RemoteException;
+import java.rmi.registry.LocateRegistry;
 
 public class DMListenerRMI implements DMListener, Runnable {
+    private YarnApplicationMaster jc;
+
     @Override
     public void registerToDM() {
 
@@ -19,10 +22,16 @@ public class DMListenerRMI implements DMListener, Runnable {
     }
 
     @Override
+    public void setYarnApplicationMaster(YarnApplicationMaster jc) {
+        this.jc = jc;
+    }
+
+    @Override
     public void run() {
         try {
-            DMListenerEnforcer enforcer = new DMListenerEnforcerRMIImpl();
-            Naming.rebind("rmi://127.0.0.1:1999/listener", enforcer);
+            DMListenerEnforcer enforcer = new DMListenerEnforcerRMIImpl(jc);
+            LocateRegistry.createRegistry(1999);
+            Naming.rebind("rmi://localhost:1999/listener", enforcer);
 
         } catch (RemoteException e) {
             e.printStackTrace();

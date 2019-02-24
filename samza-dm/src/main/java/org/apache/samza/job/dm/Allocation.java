@@ -9,6 +9,11 @@ public class Allocation {
         this.parallelism = 1;
     }
 
+    public Allocation(String stageID, int parallelism) {
+        this.stageID = stageID;
+        this.parallelism = parallelism;
+    }
+
     public Allocation(String stageID, Resource clusterResource, int parallelism) {
         this.stageID = stageID;
         this.clusterResource = clusterResource;

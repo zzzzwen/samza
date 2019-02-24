@@ -169,6 +169,12 @@ public class YarnApplicationMaster {
         try {
             //initialize JobCoordinator state
             log.info("Starting YarnApplicationMaster");
+
+            // init and start the listener
+            DMListener listener = new DMListenerRMI();
+            listener.setYarnApplicationMaster(this);
+            listener.startListener();
+
             leaderJobCoordinator.start();
             containerProcessManager.start();
             partitionMonitor.start();
@@ -199,6 +205,15 @@ public class YarnApplicationMaster {
             onShutDown();
         }
     }
+
+    void scaleUpByN(int numContainer){
+        for (int i = 0; i< numContainer; i++){
+            JobModel jobModel = jobModelManager.jobModel();
+            scaleUpByOne(jobModel);
+        }
+
+    };
+
     /* For testing */
     private JobModel scaleUpByOne(JobModel jobModel){
         List<String> processors = new ArrayList<>(jobModel.getContainers().keySet());
@@ -212,7 +227,7 @@ public class YarnApplicationMaster {
         }catch (Exception e){
         }
         log.info("Requesting more containers");
-        //containerProcessManager.requestOneMore();
+        containerProcessManager.requestOneMore();
         return jobModel;
     }
     /* For testing */

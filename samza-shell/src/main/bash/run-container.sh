@@ -25,5 +25,5 @@
 # Set container name system property for use in Log4J
 [[ $JAVA_OPTS != *-Dsamza.container.name* && ! -z "$SAMZA_CONTAINER_ID" ]] && export JAVA_OPTS="$JAVA_OPTS -Dsamza.container.name=samza-container-$SAMZA_CONTAINER_ID"
 
-#exec $(dirname $0)/run-class.sh org.apache.samza.runtime.LocalStreamProcessorRunner "$@"
-exec $(dirname $0)/run-class.sh org.apache.samza.runtime.LocalContainerRunner "$@"
+exec $(dirname $0)/run-class.sh org.apache.samza.runtime.LocalStreamProcessorRunner "$@"
+#exec $(dirname $0)/run-class.sh org.apache.samza.runtime.LocalContainerRunner "$@"
