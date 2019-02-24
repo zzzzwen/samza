@@ -1,5 +1,7 @@
 package org.apache.samza.job.dm;
 
+import org.apache.samza.config.Config;
+
 import java.net.MalformedURLException;
 import java.rmi.Naming;
 import java.rmi.RemoteException;
@@ -18,6 +20,11 @@ public class DMSchedulerListenerRMIImpl implements DMSchedulerListener, Runnable
     @Override
     public void setScheduler(DMScheduler scheduler) {
         this.scheduler = scheduler;
+    }
+
+    @Override
+    public void setConfig(Config config) {
+
     }
 
     @Override

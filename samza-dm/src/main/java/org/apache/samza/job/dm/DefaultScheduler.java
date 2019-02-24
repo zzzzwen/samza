@@ -50,6 +50,7 @@ public class DefaultScheduler implements DMScheduler {
         try {
             DMSchedulerListener listener = (DMSchedulerListener) Class.forName(listenerClass).newInstance();
             listener.setScheduler(this);
+            listener.setConfig(config);
             listener.startListener();
         } catch (InstantiationException e) {
             e.printStackTrace();

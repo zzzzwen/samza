@@ -5,17 +5,19 @@ import com.google.gson.JsonParser;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.samza.config.Config;
 
 import java.util.Arrays;
 import java.util.Properties;
 
 public class DMSchedulerListenerKafkaImpl implements DMSchedulerListener {
     DMScheduler scheduler;
+    Config config;
 
     @Override
     public void startListener() {
 
-        String metricsTopicName = "metrics";
+        String metricsTopicName = config.get("metrics.reporter.snapshot.stream", "kafka.metrics").substring(6);
 
         Properties props = new Properties();
         props.put("bootstrap.servers", "localhost:9092");
@@ -50,5 +52,10 @@ public class DMSchedulerListenerKafkaImpl implements DMSchedulerListener {
     @Override
     public void setScheduler(DMScheduler scheduler) {
         this.scheduler = scheduler;
+    }
+
+    @Override
+    public void setConfig(Config config) {
+        this.config = config;
     }
 }
