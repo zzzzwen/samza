@@ -17,8 +17,8 @@ public class DMSchedulerListenerKafkaImpl implements DMSchedulerListener {
     @Override
     public void startListener() {
 
-        String metricsTopicName = config.get("metrics.reporter.snapshot.stream", "kafka.metrics").substring(6);
-
+//        String metricsTopicName = config.get("metrics.reporter.snapshot.stream", "kafka.metrics").substring(6);
+        String metricsTopicName = "metrics";
         Properties props = new Properties();
         props.put("bootstrap.servers", "localhost:9092");
         props.put("group.id", "test");
@@ -34,7 +34,7 @@ public class DMSchedulerListenerKafkaImpl implements DMSchedulerListener {
 
         consumer.subscribe(Arrays.asList(metricsTopicName));
 
-        System.out.println("Subscribing to kafka metrics stream");
+        System.out.println("Subscribing to kafka metrics stream: " + metricsTopicName);
 
 
         while (true) {

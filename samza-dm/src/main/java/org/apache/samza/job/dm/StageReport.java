@@ -28,8 +28,10 @@ public class StageReport {
 
         if (type.equals("ApplicationMaster")) {
             JsonObject metrics = jsondata.getAsJsonObject("metrics");
-            JsonObject containerManagerMetrics = metrics.getAsJsonObject("org.apache.samza.metrics.ContainerProcessManagerMetrics");
-            this.setRunningContainers(containerManagerMetrics.getAsJsonPrimitive("running-containers").getAsInt());
+            if (metrics.has("org.apache.samza.metrics.ContainerProcessManagerMetrics")){
+                JsonObject containerManagerMetrics = metrics.getAsJsonObject("org.apache.samza.metrics.ContainerProcessManagerMetrics");
+                this.setRunningContainers(containerManagerMetrics.getAsJsonPrimitive("running-containers").getAsInt());
+            }
         } else if (type.contains("TaskName-Partition")) {
             JsonObject metrics = jsondata.getAsJsonObject("metrics");
             JsonObject taskIntanceMetrics = metrics.getAsJsonObject("org.apache.samza.container.TaskInstanceMetrics");
