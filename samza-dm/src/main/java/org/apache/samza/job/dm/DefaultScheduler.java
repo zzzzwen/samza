@@ -107,15 +107,14 @@ public class DefaultScheduler implements DMScheduler {
             Stage curr = stages.get(report.getName());
             curr.setRunningContainers(report.getRunningContainers());
             this.dispatcher.updateEnforcerURL(report.getName(), report.getHost()+ ":1999");
-        } else {
+        } else if (report.getType().contains("TaskName-Partition")) {
             Stage curr = stages.get(report.getName());
-            if (report.getType().contains("TaskName-Partition")) {
-                if (report.getThroughput() > 5 && curr.getRunningContainers() == 1) {
-                    LOG.info("Requesting scaling of containers");
-//                    this.dispatcher.enforceSchema(new Allocation(report.getName(), stages.get(report.getName()).getRunningContainers() +1));
-                    this.dispatcher.enforceSchema(new Allocation(report.getName(), 1));
-                }
+            if (report.getThroughput() > 5 && curr.getRunningContainers() == 1) {
+                LOG.info("Requesting scaling of containers");
+//                this.dispatcher.enforceSchema(new Allocation(report.getName(), stages.get(report.getName()).getRunningContainers() +1));
+                this.dispatcher.enforceSchema(new Allocation(report.getName(), 1));
             }
+
         }
 
          // TODO: add mechanism to trigger scheduling
