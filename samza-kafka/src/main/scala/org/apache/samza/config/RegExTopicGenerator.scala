@@ -21,11 +21,11 @@ package org.apache.samza.config
 
 import org.I0Itec.zkclient.ZkClient
 import kafka.utils.ZkUtils
-import org.apache.samza.config.KafkaConfig.{ Config2Kafka, REGEX_RESOLVED_STREAMS }
+import org.apache.samza.config.KafkaConfig.{Config2Kafka, REGEX_RESOLVED_STREAMS}
 import org.apache.samza.SamzaException
-import org.apache.samza.util.Util
+import org.apache.samza.util.{Logging, StreamUtil}
+
 import collection.JavaConverters._
-import org.apache.samza.util.Logging
 import scala.collection._
 import org.apache.samza.config.TaskConfig.Config2Task
 import org.apache.samza.system.SystemStream
@@ -71,7 +71,8 @@ class RegExTopicGenerator extends ConfigRewriter with Logging {
       info("Generating new configs for matching stream %s." format m)
 
       if (existingInputStreams.contains(m)) {
-        throw new SamzaException("Regex '%s' matches existing, statically defined input %s." format (regex, m))
+        warn("Regex '%s' matches existing, statically defined input %s. " +
+          "Please ensure regex-defined and statically-defined inputs are exclusive." format (regex, m))
       }
 
       newInputStreams.add(m)
@@ -87,7 +88,7 @@ class RegExTopicGenerator extends ConfigRewriter with Logging {
     info("Generated config values for %d new topics" format newInputStreams.size)
 
     val inputStreams = TaskConfig.INPUT_STREAMS -> (existingInputStreams ++ newInputStreams)
-      .map(Util.getNameFromSystemStream)
+      .map(StreamUtil.getNameFromSystemStream)
       .toArray
       .sortWith(_ < _)
       .mkString(",")

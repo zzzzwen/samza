@@ -20,7 +20,8 @@
 package org.apache.samza.storage.kv;
 
 import org.apache.samza.config.Config;
-import org.apache.samza.container.SamzaContainerContext;
+import org.apache.samza.context.ContainerContext;
+import org.apache.samza.context.JobContext;
 import org.rocksdb.BlockBasedTableConfig;
 import org.rocksdb.CompactionStyle;
 import org.rocksdb.CompressionType;
@@ -41,12 +42,11 @@ public class RocksDbOptionsHelper {
   private static final String ROCKSDB_MAX_LOG_FILE_SIZE_BYTES = "rocksdb.max.log.file.size.bytes";
   private static final String ROCKSDB_KEEP_LOG_FILE_NUM = "rocksdb.keep.log.file.num";
 
-  public static Options options(Config storeConfig, SamzaContainerContext containerContext) {
+  public static Options options(Config storeConfig, int numTasksForContainer) {
     Options options = new Options();
     Long writeBufSize = storeConfig.getLong("container.write.buffer.size.bytes", 32 * 1024 * 1024);
     // Cache size and write buffer size are specified on a per-container basis.
-    int numTasks = containerContext.taskNames.size();
-    options.setWriteBufferSize((int) (writeBufSize / numTasks));
+    options.setWriteBufferSize((int) (writeBufSize / numTasksForContainer));
 
     CompressionType compressionType = CompressionType.SNAPPY_COMPRESSION;
     String compressionInConfig = storeConfig.get(ROCKSDB_COMPRESSION, "snappy");
@@ -75,12 +75,10 @@ public class RocksDbOptionsHelper {
     }
     options.setCompressionType(compressionType);
 
-    Long cacheSize = storeConfig.getLong("container.cache.size.bytes", 100 * 1024 * 1024L);
-    Long cacheSizePerContainer = cacheSize / numTasks;
-
+    long blockCacheSize = getBlockCacheSize(storeConfig, numTasksForContainer);
     int blockSize = storeConfig.getInt(ROCKSDB_BLOCK_SIZE_BYTES, 4096);
     BlockBasedTableConfig tableOptions = new BlockBasedTableConfig();
-    tableOptions.setBlockCacheSize(cacheSizePerContainer).setBlockSize(blockSize);
+    tableOptions.setBlockCacheSize(blockCacheSize).setBlockSize(blockSize);
     options.setTableFormatConfig(tableOptions);
 
     CompactionStyle compactionStyle = CompactionStyle.UNIVERSAL;
@@ -109,5 +107,10 @@ public class RocksDbOptionsHelper {
     options.setKeepLogFileNum(storeConfig.getLong(ROCKSDB_KEEP_LOG_FILE_NUM, 2));
 
     return options;
+  }
+
+  public static Long getBlockCacheSize(Config storeConfig, int numTasksForContainer) {
+    long cacheSize = storeConfig.getLong("container.cache.size.bytes", 100 * 1024 * 1024L);
+    return cacheSize / numTasksForContainer;
   }
 }

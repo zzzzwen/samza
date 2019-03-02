@@ -18,12 +18,11 @@
  */
 package org.apache.samza.operators.impl;
 
-import org.apache.samza.config.Config;
+import org.apache.samza.context.Context;
 import org.apache.samza.operators.functions.FlatMapFunction;
 import org.apache.samza.operators.spec.OperatorSpec;
 import org.apache.samza.operators.spec.StreamOperatorSpec;
 import org.apache.samza.task.MessageCollector;
-import org.apache.samza.task.TaskContext;
 import org.apache.samza.task.TaskCoordinator;
 
 import java.util.Collection;
@@ -40,15 +39,14 @@ class StreamOperatorImpl<M, RM> extends OperatorImpl<M, RM> {
   private final StreamOperatorSpec<M, RM> streamOpSpec;
   private final FlatMapFunction<M, RM> transformFn;
 
-  StreamOperatorImpl(StreamOperatorSpec<M, RM> streamOpSpec,
-      Config config, TaskContext context) {
+  StreamOperatorImpl(StreamOperatorSpec<M, RM> streamOpSpec) {
     this.streamOpSpec = streamOpSpec;
     this.transformFn = streamOpSpec.getTransformFn();
   }
 
   @Override
-  protected void handleInit(Config config, TaskContext context) {
-    transformFn.init(config, context);
+  protected void handleInit(Context context) {
+    transformFn.init(context);
   }
 
   @Override

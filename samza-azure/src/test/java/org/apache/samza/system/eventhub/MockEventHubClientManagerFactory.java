@@ -26,7 +26,6 @@ import org.junit.Assert;
 import org.mockito.stubbing.Answer;
 import org.powermock.api.mockito.PowerMockito;
 
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -39,7 +38,7 @@ import static org.mockito.Matchers.*;
 public class MockEventHubClientManagerFactory extends EventHubClientManagerFactory {
   private Map<SystemStreamPartition, List<EventData>> eventData;
   private Map<String, Map<String, Map<Integer, List<EventData>>>> receivedData;
-  private Map<String, String> startingOffsets = new HashMap<>();
+  private Map<String, EventPosition> startingOffsets = new HashMap<>();
 
   public MockEventHubClientManagerFactory() {
     this.receivedData = new HashMap<>();
@@ -71,7 +70,11 @@ public class MockEventHubClientManagerFactory extends EventHubClientManagerFacto
     handlers.forEach((ssp, value) -> value.onReceive(eventData.get(ssp)));
   }
 
-  public String getPartitionOffset(String partitionId) {
+  public void triggerError(Map<SystemStreamPartition, PartitionReceiveHandler> handlers, Throwable e) {
+    handlers.forEach((ssp, value) -> value.onError(e));
+  }
+
+  public EventPosition getPartitionOffset(String partitionId) {
     return startingOffsets.getOrDefault(partitionId, null);
   }
 
@@ -101,6 +104,10 @@ public class MockEventHubClientManagerFactory extends EventHubClientManagerFacto
           }
           return null;
         });
+      PartitionRuntimeInformation mockPartitionRuntimeInfo = PowerMockito.mock(PartitionRuntimeInformation.class);
+      PowerMockito.when(mockPartitionRuntimeInfo.getLastEnqueuedOffset())
+              .thenReturn(EventHubSystemConsumer.START_OF_STREAM);
+      CompletableFuture<PartitionRuntimeInformation> partitionFuture =  new MockPartitionFuture(mockPartitionRuntimeInfo);
 
       // Producer mocks
       PartitionSender mockPartitionSender0 = PowerMockito.mock(PartitionSender.class);
@@ -124,19 +131,20 @@ public class MockEventHubClientManagerFactory extends EventHubClientManagerFacto
 
       try {
         // Consumer calls
-        PowerMockito.when(mockEventHubClient.createReceiverSync(anyString(), anyString(), any(Instant.class)))
+        PowerMockito.when(mockEventHubClient.createReceiverSync(anyString(), anyString(), anyObject()))
                 .then((Answer<PartitionReceiver>) invocationOnMock -> {
                     String partitionId = invocationOnMock.getArgumentAt(1, String.class);
-                    startingOffsets.put(partitionId, EventHubSystemConsumer.END_OF_STREAM);
+                    startingOffsets.put(partitionId, EventPosition.fromEndOfStream());
                     return mockPartitionReceiver;
                   });
-        PowerMockito.when(mockEventHubClient.createReceiverSync(anyString(), anyString(), anyString(), anyBoolean()))
+        PowerMockito.when(mockEventHubClient.createReceiverSync(anyString(), anyString(), anyObject()))
                 .then((Answer<PartitionReceiver>) invocationOnMock -> {
                     String partitionId = invocationOnMock.getArgumentAt(1, String.class);
-                    String offset = invocationOnMock.getArgumentAt(2, String.class);
+                    EventPosition offset = invocationOnMock.getArgumentAt(2, EventPosition.class);
                     startingOffsets.put(partitionId, offset);
                     return mockPartitionReceiver;
                   });
+        PowerMockito.when(mockEventHubClient.getPartitionRuntimeInformation(anyString())).thenReturn(partitionFuture);
 
         // Producer calls
         PowerMockito.when(mockEventHubClient.createPartitionSenderSync("0")).thenReturn(mockPartitionSender0);
@@ -187,6 +195,19 @@ public class MockEventHubClientManagerFactory extends EventHubClientManagerFacto
 
       @Override
       public EventHubRuntimeInformation get(long timeout, TimeUnit unit) {
+        return runtimeInformation;
+      }
+    }
+
+    private class MockPartitionFuture extends CompletableFuture<PartitionRuntimeInformation> {
+      PartitionRuntimeInformation runtimeInformation;
+
+      MockPartitionFuture(PartitionRuntimeInformation runtimeInformation) {
+        this.runtimeInformation = runtimeInformation;
+      }
+
+      @Override
+      public PartitionRuntimeInformation get(long timeout, TimeUnit unit) {
         return runtimeInformation;
       }
     }

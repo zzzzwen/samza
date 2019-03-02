@@ -19,6 +19,7 @@
 package org.apache.samza.operators.spec;
 
 
+import org.apache.samza.operators.functions.ScheduledFunction;
 import org.apache.samza.operators.functions.WatermarkFunction;
 
 /**
@@ -54,6 +55,11 @@ public class OutputOperatorSpec<M> extends OperatorSpec<M, Void> {
 
   @Override
   public WatermarkFunction getWatermarkFn() {
+    return null;
+  }
+
+  @Override
+  public ScheduledFunction getScheduledFn() {
     return null;
   }
 }

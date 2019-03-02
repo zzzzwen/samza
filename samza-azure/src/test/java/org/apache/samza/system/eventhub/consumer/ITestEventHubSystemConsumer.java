@@ -29,14 +29,15 @@ import org.apache.samza.system.eventhub.MockEventHubConfigFactory;
 import org.apache.samza.system.eventhub.TestMetricsRegistry;
 import org.apache.samza.system.eventhub.producer.EventHubSystemProducer;
 import org.junit.Assert;
+import org.junit.Ignore;
 import org.junit.Test;
 
-import java.util.Collections;
-import java.util.List;
+import java.util.*;
 
 import static org.apache.samza.system.eventhub.MockEventHubConfigFactory.STREAM_NAME1;
 import static org.apache.samza.system.eventhub.MockEventHubConfigFactory.SYSTEM_NAME;
 
+@Ignore("Requires Azure account credentials")
 public class ITestEventHubSystemConsumer {
 
   private Config createEventHubConfig() {
@@ -65,8 +66,8 @@ public class ITestEventHubSystemConsumer {
       if (numEvents > 0) {
         EventHubIncomingMessageEnvelope eventData = (EventHubIncomingMessageEnvelope) result.get(0);
         System.out.println("System properties: " + eventData.getEventData().getSystemProperties());
+        System.out.println("Key: " + new String((byte[]) eventData.getKey()));
         System.out.println("Message: " + new String((byte[]) eventData.getMessage()));
-        break;
       }
       System.out.println("Retries left: " + numRetries);
     }

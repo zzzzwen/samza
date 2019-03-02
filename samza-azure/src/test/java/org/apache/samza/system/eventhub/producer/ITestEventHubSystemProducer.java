@@ -21,21 +21,23 @@ package org.apache.samza.system.eventhub.producer;
 
 import com.microsoft.azure.eventhubs.EventData;
 import com.microsoft.azure.eventhubs.EventHubClient;
+import com.microsoft.azure.eventhubs.EventHubException;
+import com.microsoft.azure.eventhubs.EventPosition;
 import com.microsoft.azure.eventhubs.PartitionReceiver;
-import com.microsoft.azure.servicebus.ServiceBusException;
 import org.apache.samza.SamzaException;
 import org.apache.samza.config.Config;
 import org.apache.samza.system.*;
 import org.apache.samza.system.eventhub.*;
-import org.apache.samza.system.eventhub.consumer.EventHubSystemConsumer;
 import org.apache.samza.util.NoOpMetricsRegistry;
 import org.junit.Assert;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import static org.apache.samza.system.eventhub.MockEventHubConfigFactory.*;
 
+@Ignore("Requires Azure account credentials")
 public class ITestEventHubSystemProducer {
   private static final Logger LOG = LoggerFactory.getLogger(ITestEventHubSystemProducer.class.getName());
 
@@ -74,7 +76,7 @@ public class ITestEventHubSystemProducer {
     systemProducer.send(STREAM_NAME1, createMessageEnvelope(STREAM_NAME1));
 
     try {
-      systemProducer.send(STREAM_NAME2, createMessageEnvelope(STREAM_NAME1));
+      systemProducer.send("unregistered_stream", createMessageEnvelope("unregistered_stream"));
       Assert.fail("Sending event to destination that is not registered should throw exception");
     } catch (SamzaException e) {
     }
@@ -90,7 +92,7 @@ public class ITestEventHubSystemProducer {
   }
 
   @Test
-  public void testReceive() throws ServiceBusException {
+  public void testReceive() throws EventHubException {
     EventHubClientManagerFactory clientFactory = new EventHubClientManagerFactory();
     EventHubClientManager wrapper = clientFactory
             .getEventHubClientManager(SYSTEM_NAME, STREAM_NAME1, new EventHubConfig(createEventHubConfig()));
@@ -98,11 +100,11 @@ public class ITestEventHubSystemProducer {
     EventHubClient client = wrapper.getEventHubClient();
     PartitionReceiver receiver =
             client.createReceiverSync(EventHubClient.DEFAULT_CONSUMER_GROUP_NAME, "0",
-                    EventHubSystemConsumer.START_OF_STREAM, true);
+                    EventPosition.fromStartOfStream());
     receiveMessages(receiver, 300);
   }
 
-  private void receiveMessages(PartitionReceiver receiver, int numMessages) throws ServiceBusException {
+  private void receiveMessages(PartitionReceiver receiver, int numMessages) throws EventHubException {
     int count = 0;
     while (count < numMessages) {
 

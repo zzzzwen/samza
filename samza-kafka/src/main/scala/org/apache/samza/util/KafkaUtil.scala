@@ -19,19 +19,16 @@
 
 package org.apache.samza.util
 
-import java.util.Properties
 import java.util.concurrent.atomic.AtomicLong
 import kafka.admin.AdminUtils
 import kafka.utils.ZkUtils
 import org.apache.kafka.common.PartitionInfo
-import org.apache.samza.config.ApplicationConfig.ApplicationMode
-import org.apache.samza.config.{ApplicationConfig, Config, ConfigException}
+import org.apache.samza.config.{Config, ConfigException}
 import org.apache.samza.config.JobConfig.Config2Job
 import org.apache.samza.execution.StreamManager
 import org.apache.samza.system.OutgoingMessageEnvelope
-import kafka.common.{ErrorMapping, ReplicaNotAvailableException}
-import org.apache.kafka.common.errors.TopicExistsException
-import org.apache.samza.system.kafka.TopicMetadataCache
+import org.apache.kafka.common.errors.ReplicaNotAvailableException
+import kafka.common.ErrorMapping
 
 object KafkaUtil extends Logging {
   /**
@@ -39,17 +36,6 @@ object KafkaUtil extends Logging {
    */
   val CHECKPOINT_LOG_VERSION_NUMBER = 1
   val counter = new AtomicLong(0)
-
-  def getClientId(id: String, config: Config): String = getClientId(
-    id,
-    config.getName.getOrElse(throw new ConfigException("Missing job name.")),
-    config.getJobId.getOrElse("1"))
-
-  def getClientId(id: String, jobName: String, jobId: String): String =
-    "%s-%s-%s" format
-      (id.replaceAll("[^A-Za-z0-9]", "_"),
-        jobName.replaceAll("[^A-Za-z0-9]", "_"),
-        jobId.replaceAll("[^A-Za-z0-9]", "_"))
 
   private def abs(n: Int) = if (n == Integer.MIN_VALUE) 0 else math.abs(n)
 
@@ -71,9 +57,10 @@ object KafkaUtil extends Logging {
    * <a href="https://cwiki.apache.org/confluence/display/KAFKA/A+Guide+To+The+Kafka+Protocol">protocol
    * docs</a>, ReplicaNotAvailableException can be safely ignored.
    */
-  def maybeThrowException(code: Short) {
+  def maybeThrowException(e: Exception) {
     try {
-      ErrorMapping.maybeThrowException(code)
+      if (e != null)
+        throw e
     } catch {
       case e: ReplicaNotAvailableException =>
         debug("Got ReplicaNotAvailableException, but ignoring since it's safe to do so.")

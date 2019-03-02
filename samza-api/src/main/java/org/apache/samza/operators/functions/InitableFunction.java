@@ -16,30 +16,27 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.samza.operators.functions;
 
 import org.apache.samza.annotation.InterfaceStability;
-import org.apache.samza.config.Config;
-import org.apache.samza.task.TaskContext;
-
+import org.apache.samza.context.Context;
 
 /**
  * A function that can be initialized before execution.
- *
- * <p> Order of initialization: {@link InitableFunction}s are invoked in the topological order of operators in the
- * {@link org.apache.samza.operators.StreamGraph}. For any two operators A and B in the graph, if operator B consumes results
- * from operator A, then operator A is guaranteed to be initialized before operator B.
+ * <p>
+ * Order of initialization: {@link InitableFunction}s are invoked in the topological order of operators in the
+ * {@link org.apache.samza.application.descriptors.StreamApplicationDescriptor}. For any two operators A and B in the
+ * graph, if operator B consumes results from operator A, then operator A is guaranteed to be initialized before
+ * operator B.
  *
  */
-@InterfaceStability.Unstable
+@InterfaceStability.Evolving
 public interface InitableFunction {
-
   /**
    * Initializes the function before any messages are processed.
    *
-   * @param config the {@link Config} for the application
-   * @param context the {@link TaskContext} for this task
+   * @param context the {@link Context} for this task
    */
-  default void init(Config config, TaskContext context) { }
-
+  default void init(Context context) { }
 }

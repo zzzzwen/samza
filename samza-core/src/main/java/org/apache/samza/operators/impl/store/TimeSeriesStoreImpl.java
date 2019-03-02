@@ -23,6 +23,7 @@ import org.apache.samza.storage.kv.ClosableIterator;
 import org.apache.samza.storage.kv.Entry;
 import org.apache.samza.storage.kv.KeyValueIterator;
 import org.apache.samza.storage.kv.KeyValueStore;
+import org.apache.samza.util.TimestampedValue;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -153,10 +154,13 @@ public class TimeSeriesStoreImpl<K, V> implements TimeSeriesStore<K, V> {
     List<TimeSeriesKey<K>> keysToDelete = new LinkedList<>();
 
     KeyValueIterator<TimeSeriesKey<K>, V> range = kvStore.range(fromKey, toKey);
-    while (range.hasNext()) {
-      keysToDelete.add(range.next().getKey());
+    try {
+      while (range.hasNext()) {
+        keysToDelete.add(range.next().getKey());
+      }
+    } finally {
+      range.close();
     }
-
     kvStore.deleteAll(keysToDelete);
   }
 

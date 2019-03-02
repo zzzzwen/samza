@@ -20,64 +20,92 @@
 package org.apache.samza.container
 
 
+import java.util.Optional
+import java.util.concurrent.ScheduledExecutorService
+
 import org.apache.samza.SamzaException
 import org.apache.samza.checkpoint.OffsetManager
 import org.apache.samza.config.Config
 import org.apache.samza.config.StreamConfig.Config2Stream
-import org.apache.samza.job.model.JobModel
+import org.apache.samza.context._
+import org.apache.samza.job.model.{JobModel, TaskModel}
 import org.apache.samza.metrics.MetricsReporter
-import org.apache.samza.storage.TaskStorageManager
-import org.apache.samza.system.IncomingMessageEnvelope
-import org.apache.samza.system.StreamMetadataCache
-import org.apache.samza.system.SystemAdmin
-import org.apache.samza.system.SystemConsumers
-import org.apache.samza.system.SystemStreamPartition
-import org.apache.samza.task.AsyncStreamTask
-import org.apache.samza.task.ClosableTask
-import org.apache.samza.task.EndOfStreamListenerTask
-import org.apache.samza.task.InitableTask
-import org.apache.samza.task.ReadableCoordinator
-import org.apache.samza.task.StreamTask
-import org.apache.samza.task.TaskCallbackFactory
-import org.apache.samza.task.TaskInstanceCollector
-import org.apache.samza.task.WindowableTask
-import org.apache.samza.util.Logging
+import org.apache.samza.scheduler.{CallbackSchedulerImpl, ScheduledCallback}
+import org.apache.samza.storage.kv.KeyValueStore
+import org.apache.samza.storage.{TaskSideInputStorageManager, TaskStorageManager}
+import org.apache.samza.system._
+import org.apache.samza.table.TableManager
+import org.apache.samza.task._
+import org.apache.samza.util.{Logging, ScalaJavaUtil}
 
+import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
+import scala.collection.Map
 
 class TaskInstance(
   val task: Any,
-  val taskName: TaskName,
-  config: Config,
+  taskModel: TaskModel,
   val metrics: TaskInstanceMetrics,
-  systemAdmins: Map[String, SystemAdmin],
+  systemAdmins: SystemAdmins,
   consumerMultiplexer: SystemConsumers,
   collector: TaskInstanceCollector,
-  containerContext: SamzaContainerContext,
   val offsetManager: OffsetManager = new OffsetManager,
   storageManager: TaskStorageManager = null,
+  tableManager: TableManager = null,
   reporters: Map[String, MetricsReporter] = Map(),
   val systemStreamPartitions: Set[SystemStreamPartition] = Set(),
   val exceptionHandler: TaskInstanceExceptionHandler = new TaskInstanceExceptionHandler,
   jobModel: JobModel = null,
-  streamMetadataCache: StreamMetadataCache = null) extends Logging {
+  streamMetadataCache: StreamMetadataCache = null,
+  timerExecutor : ScheduledExecutorService = null,
+  sideInputSSPs: Set[SystemStreamPartition] = Set(),
+  sideInputStorageManager: TaskSideInputStorageManager = null,
+  jobContext: JobContext,
+  containerContext: ContainerContext,
+  applicationContainerContextOption: Option[ApplicationContainerContext],
+  applicationTaskContextFactoryOption: Option[ApplicationTaskContextFactory[ApplicationTaskContext]]
+) extends Logging {
+
+  val taskName: TaskName = taskModel.getTaskName
   val isInitableTask = task.isInstanceOf[InitableTask]
   val isWindowableTask = task.isInstanceOf[WindowableTask]
   val isEndOfStreamListenerTask = task.isInstanceOf[EndOfStreamListenerTask]
   val isClosableTask = task.isInstanceOf[ClosableTask]
   val isAsyncTask = task.isInstanceOf[AsyncStreamTask]
 
-  val context = new TaskContextImpl(taskName,metrics, containerContext, systemStreamPartitions.asJava, offsetManager,
-                                    storageManager, jobModel, streamMetadataCache)
+  val epochTimeScheduler: EpochTimeScheduler = EpochTimeScheduler.create(timerExecutor)
 
-  // store the (ssp -> if this ssp is catched up) mapping. "catched up"
+  private val kvStoreSupplier = ScalaJavaUtil.toJavaFunction(
+    (storeName: String) => {
+      if (storageManager != null && storageManager.getStore(storeName).isDefined) {
+        storageManager.getStore(storeName).get.asInstanceOf[KeyValueStore[_, _]]
+      } else if (sideInputStorageManager != null && sideInputStorageManager.getStore(storeName) != null) {
+        sideInputStorageManager.getStore(storeName).asInstanceOf[KeyValueStore[_, _]]
+      } else {
+        null
+      }
+    })
+  private val taskContext = new TaskContextImpl(taskModel, metrics.registry, kvStoreSupplier, tableManager,
+    new CallbackSchedulerImpl(epochTimeScheduler), offsetManager, jobModel, streamMetadataCache)
+  // need separate field for this instead of using it through Context, since Context throws an exception if it is null
+  private val applicationTaskContextOption = applicationTaskContextFactoryOption.map(_.create(jobContext,
+    containerContext, taskContext, applicationContainerContextOption.orNull))
+  val context = new ContextImpl(jobContext, containerContext, taskContext,
+    Optional.ofNullable(applicationContainerContextOption.orNull),
+    Optional.ofNullable(applicationTaskContextOption.orNull))
+
+  // store the (ssp -> if this ssp has caught up) mapping. "caught up"
   // means the same ssp in other taskInstances have the same offset as
   // the one here.
   var ssp2CaughtupMapping: scala.collection.mutable.Map[SystemStreamPartition, Boolean] =
     scala.collection.mutable.Map[SystemStreamPartition, Boolean]()
   systemStreamPartitions.foreach(ssp2CaughtupMapping += _ -> false)
 
-  val hasIntermediateStreams = config.getStreamIds.exists(config.getIsIntermediate(_))
+  private val config: Config = jobContext.getConfig
+
+  val intermediateStreams: Set[String] = config.getStreamIds.filter(config.getIsIntermediateStream).toSet
+
+  val streamsToDeleteCommittedMessages: Set[String] = config.getStreamIds.filter(config.getDeleteCommittedMessages).map(config.getPhysicalName).toSet
 
   def registerMetrics {
     debug("Registering metrics for taskName: %s" format taskName)
@@ -88,7 +116,8 @@ class TaskInstance(
   def registerOffsets {
     debug("Registering offsets for taskName: %s" format taskName)
 
-    offsetManager.register(taskName, systemStreamPartitions)
+    val sspsToRegister = systemStreamPartitions -- sideInputSSPs
+    offsetManager.register(taskName, sspsToRegister)
   }
 
   def startStores {
@@ -99,16 +128,37 @@ class TaskInstance(
     } else {
       debug("Skipping storage manager initialization for taskName: %s" format taskName)
     }
+
+    if (sideInputStorageManager != null) {
+      debug("Starting side input storage manager for taskName: %s" format taskName)
+      sideInputStorageManager.init()
+    } else {
+      debug("Skipping side input storage manager initialization for taskName: %s" format taskName)
+    }
+  }
+
+  def startTableManager {
+    if (tableManager != null) {
+      debug("Starting table manager for taskName: %s" format taskName)
+
+      tableManager.init(context)
+    } else {
+      debug("Skipping table manager initialization for taskName: %s" format taskName)
+    }
   }
 
   def initTask {
     if (isInitableTask) {
       debug("Initializing task for taskName: %s" format taskName)
 
-      task.asInstanceOf[InitableTask].init(config, context)
+      task.asInstanceOf[InitableTask].init(context)
     } else {
       debug("Skipping task initialization for taskName: %s" format taskName)
     }
+    applicationTaskContextOption.foreach(applicationTaskContext => {
+      debug("Starting application-defined task context for taskName: %s" format taskName)
+      applicationTaskContext.start()
+    })
   }
 
   def registerProducers {
@@ -121,14 +171,14 @@ class TaskInstance(
     debug("Registering consumers for taskName: %s" format taskName)
 
     systemStreamPartitions.foreach(systemStreamPartition => {
-      val offset = offsetManager.getStartingOffset(taskName, systemStreamPartition)
-      .getOrElse(throw new SamzaException("No offset defined for SystemStreamPartition: %s" format systemStreamPartition))
-      consumerMultiplexer.register(systemStreamPartition, offset)
-      metrics.addOffsetGauge(systemStreamPartition, () => {
-        offsetManager
-          .getLastProcessedOffset(taskName, systemStreamPartition)
-          .orNull
-      })
+      val startingOffset = getStartingOffset(systemStreamPartition)
+      consumerMultiplexer.register(systemStreamPartition, startingOffset)
+      metrics.addOffsetGauge(systemStreamPartition, () =>
+        if (sideInputSSPs.contains(systemStreamPartition)) {
+          sideInputStorageManager.getLastProcessedOffset(systemStreamPartition)
+        } else {
+          offsetManager.getLastProcessedOffset(taskName, systemStreamPartition).orNull
+        })
     })
   }
 
@@ -136,31 +186,37 @@ class TaskInstance(
     callbackFactory: TaskCallbackFactory = null) {
     metrics.processes.inc
 
-    if (!ssp2CaughtupMapping.getOrElse(envelope.getSystemStreamPartition,
-      throw new SamzaException(envelope.getSystemStreamPartition + " is not registered!"))) {
+    val incomingMessageSsp = envelope.getSystemStreamPartition
+
+    if (!ssp2CaughtupMapping.getOrElse(incomingMessageSsp,
+      throw new SamzaException(incomingMessageSsp + " is not registered!"))) {
       checkCaughtUp(envelope)
     }
 
-    if (ssp2CaughtupMapping(envelope.getSystemStreamPartition)) {
+    if (ssp2CaughtupMapping(incomingMessageSsp)) {
       metrics.messagesActuallyProcessed.inc
 
       trace("Processing incoming message envelope for taskName and SSP: %s, %s"
-        format (taskName, envelope.getSystemStreamPartition))
+        format (taskName, incomingMessageSsp))
 
-      if (isAsyncTask) {
-        exceptionHandler.maybeHandle {
-          val callback = callbackFactory.createCallback()
-          task.asInstanceOf[AsyncStreamTask].processAsync(envelope, collector, coordinator, callback)
-        }
+      if (sideInputSSPs.contains(incomingMessageSsp) && !envelope.isEndOfStream) {
+        sideInputStorageManager.process(envelope)
       } else {
-        exceptionHandler.maybeHandle {
-         task.asInstanceOf[StreamTask].process(envelope, collector, coordinator)
+        if (isAsyncTask) {
+          exceptionHandler.maybeHandle {
+            val callback = callbackFactory.createCallback()
+            task.asInstanceOf[AsyncStreamTask].processAsync(envelope, collector, coordinator, callback)
+          }
+        } else {
+          exceptionHandler.maybeHandle {
+            task.asInstanceOf[StreamTask].process(envelope, collector, coordinator)
+          }
+
+          trace("Updating offset map for taskName, SSP and offset: %s, %s, %s"
+            format (taskName, incomingMessageSsp, envelope.getOffset))
+
+          offsetManager.update(taskName, incomingMessageSsp, envelope.getOffset)
         }
-
-        trace("Updating offset map for taskName, SSP and offset: %s, %s, %s"
-          format (taskName, envelope.getSystemStreamPartition, envelope.getOffset))
-
-        offsetManager.update(taskName, envelope.getSystemStreamPartition, envelope.getOffset)
       }
     }
   }
@@ -185,6 +241,16 @@ class TaskInstance(
     }
   }
 
+  def scheduler(coordinator: ReadableCoordinator) {
+    trace("Scheduler for taskName: %s" format taskName)
+
+    exceptionHandler.maybeHandle {
+      epochTimeScheduler.removeReadyTimers().entrySet().foreach { entry =>
+        entry.getValue.asInstanceOf[ScheduledCallback[Any]].onCallback(entry.getKey.getKey, collector, coordinator)
+      }
+    }
+  }
+
   def commit {
     metrics.commits.inc
 
@@ -200,12 +266,29 @@ class TaskInstance(
       storageManager.flush
     }
 
-    trace("Checkpointing offsets for taskName: %s" format taskName)
+    trace("Flushing side input stores for taskName: %s" format taskName)
+    if (sideInputStorageManager != null) {
+      sideInputStorageManager.flush()
+    }
 
+    trace("Checkpointing offsets for taskName: %s" format taskName)
     offsetManager.writeCheckpoint(taskName, checkpoint)
+
+    if (checkpoint != null) {
+      checkpoint.getOffsets.asScala
+        .filter { case (ssp, _) => streamsToDeleteCommittedMessages.contains(ssp.getStream) } // Only delete data of intermediate streams
+        .groupBy { case (ssp, _) => ssp.getSystem }
+        .foreach { case (systemName: String, offsets: Map[SystemStreamPartition, String]) =>
+          systemAdmins.getSystemAdmin(systemName).deleteMessages(offsets.asJava)
+        }
+    }
   }
 
   def shutdownTask {
+    applicationTaskContextOption.foreach(applicationTaskContext => {
+      debug("Stopping application-defined task context for taskName: %s" format taskName)
+      applicationTaskContext.stop()
+    })
     if (task.isInstanceOf[ClosableTask]) {
       debug("Shutting down stream task for taskName: %s" format taskName)
 
@@ -223,6 +306,23 @@ class TaskInstance(
     } else {
       debug("Skipping storage manager shutdown for taskName: %s" format taskName)
     }
+
+    if (sideInputStorageManager != null) {
+      debug("Shutting down side input storage manager for taskName: %s" format taskName)
+      sideInputStorageManager.stop()
+    } else {
+      debug("Skipping side input storage manager shutdown for taskName: %s" format taskName)
+    }
+  }
+
+  def shutdownTableManager {
+    if (tableManager != null) {
+      debug("Shutting down table manager for taskName: %s" format taskName)
+
+      tableManager.close
+    } else {
+      debug("Skipping table manager shutdown for taskName: %s" format taskName)
+    }
   }
 
   override def toString() = "TaskInstance for class %s and taskName %s." format (task.getClass.getName, taskName)
@@ -231,37 +331,53 @@ class TaskInstance(
     (taskName, isWindowableTask, isClosableTask, isEndOfStreamListenerTask)
 
   /**
-   * From the envelope, check if this SSP has catched up with the starting offset of the SSP
+   * From the envelope, check if this SSP has caught up with the starting offset of the SSP
    * in this TaskInstance. If the offsets are not comparable, default to true, which means
-   * it's already catched-up.
+   * it's already caught up.
    */
   private def checkCaughtUp(envelope: IncomingMessageEnvelope) = {
+    val incomingMessageSsp = envelope.getSystemStreamPartition
+
     if (IncomingMessageEnvelope.END_OF_STREAM_OFFSET.equals(envelope.getOffset)) {
-      ssp2CaughtupMapping(envelope.getSystemStreamPartition) = true
+      ssp2CaughtupMapping(incomingMessageSsp) = true
     } else {
       systemAdmins match {
         case null => {
-          warn("systemAdmin is null. Set all SystemStreamPartitions to catched-up")
-          ssp2CaughtupMapping(envelope.getSystemStreamPartition) = true
+          warn("systemAdmin is null. Set all SystemStreamPartitions to caught-up")
+          ssp2CaughtupMapping(incomingMessageSsp) = true
         }
         case others => {
-          val startingOffset = offsetManager.getStartingOffset(taskName, envelope.getSystemStreamPartition)
-              .getOrElse(throw new SamzaException("No offset defined for SystemStreamPartition: %s" format envelope.getSystemStreamPartition))
-          val system = envelope.getSystemStreamPartition.getSystem
-          others(system).offsetComparator(envelope.getOffset, startingOffset) match {
+          val startingOffset = getStartingOffset(incomingMessageSsp)
+
+          val system = incomingMessageSsp.getSystem
+          others.getSystemAdmin(system).offsetComparator(envelope.getOffset, startingOffset) match {
             case null => {
-              info("offsets in " + system + " is not comparable. Set all SystemStreamPartitions to catched-up")
-              ssp2CaughtupMapping(envelope.getSystemStreamPartition) = true // not comparable
+              info("offsets in " + system + " is not comparable. Set all SystemStreamPartitions to caught-up")
+              ssp2CaughtupMapping(incomingMessageSsp) = true // not comparable
             }
             case result => {
               if (result >= 0) {
-                info(envelope.getSystemStreamPartition.toString + " is catched up.")
-                ssp2CaughtupMapping(envelope.getSystemStreamPartition) = true
+                info(incomingMessageSsp.toString + " has caught up.")
+                ssp2CaughtupMapping(incomingMessageSsp) = true
               }
             }
           }
         }
       }
     }
+  }
+
+  private def getStartingOffset(systemStreamPartition: SystemStreamPartition) = {
+    val offset =
+      if (sideInputSSPs.contains(systemStreamPartition)) {
+        Option(sideInputStorageManager.getStartingOffset(systemStreamPartition))
+      } else {
+        offsetManager.getStartingOffset(taskName, systemStreamPartition)
+      }
+
+    val startingOffset = offset.getOrElse(
+      throw new SamzaException("No offset defined for SystemStreamPartition: %s" format systemStreamPartition))
+
+    startingOffset
   }
 }

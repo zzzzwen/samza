@@ -32,7 +32,7 @@ title: Tutorials
 
 [Deploying a Samza Job from HDFS](deploy-samza-job-from-hdfs.html)
 
-[Deoloy Samza to CDH](deploy-samza-to-CDH.html)
+[Deploy Samza to CDH](deploy-samza-to-CDH.html)
 
 [Run Hello-samza in Multi-node YARN](run-in-multi-node-yarn.html)
 
@@ -44,6 +44,8 @@ title: Tutorials
 
 [Samza SQL User Guide](samza-sql.html)
 
+[Samza Event Hubs Connectors Example](samza-event-hubs-standalone.html)
+
 
 <!-- TODO a bunch of tutorials
 [Log Walkthrough](log-walkthrough.html)
@@ -53,5 +55,4 @@ title: Tutorials
 <a href="group-by-count.html">Group-by and Counting</a><br/>
 <a href="initialize-close.html">Initializing and Closing</a><br/>
 <a href="windowing.html">Windowing</a><br/>
-<a href="committing.html">Committing</a><br/>
--->
+<a href="committing.html">Committing</a><br/> \-->

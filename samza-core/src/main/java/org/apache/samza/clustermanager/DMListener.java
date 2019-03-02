@@ -17,5 +17,6 @@ public interface DMListener {
     /**
      * set the yarnapplicationmaster
      */
-    void setYarnApplicationMaster(YarnApplicationMaster jc);
+//    void setYarnApplicationMaster(YarnApplicationMaster jc);
+    void setYarnApplicationMaster(ClusterBasedJobCoordinator jc);
 }

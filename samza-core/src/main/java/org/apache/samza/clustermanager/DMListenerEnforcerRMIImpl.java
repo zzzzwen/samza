@@ -4,8 +4,9 @@ import java.rmi.RemoteException;
 import java.rmi.server.UnicastRemoteObject;
 
 public class DMListenerEnforcerRMIImpl extends UnicastRemoteObject implements DMListenerEnforcer {
-    YarnApplicationMaster jc;
-    DMListenerEnforcerRMIImpl(YarnApplicationMaster jc) throws RemoteException{
+//    YarnApplicationMaster jc;
+    ClusterBasedJobCoordinator jc;
+    DMListenerEnforcerRMIImpl(ClusterBasedJobCoordinator jc) throws RemoteException{
         super();
         this.jc = jc;
     }
@@ -14,6 +15,6 @@ public class DMListenerEnforcerRMIImpl extends UnicastRemoteObject implements DM
     public void enforceSchema(int parallelism) throws RemoteException {
         System.out.println("Receiving parallelism");
         System.out.println(parallelism);
-        jc.scaleUpByN(parallelism);
+//        jc.scaleUpByN(parallelism);
     }
 }

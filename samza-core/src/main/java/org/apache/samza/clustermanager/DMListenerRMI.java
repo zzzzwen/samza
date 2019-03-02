@@ -6,7 +6,7 @@ import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 
 public class DMListenerRMI implements DMListener, Runnable {
-    private YarnApplicationMaster jc;
+    private ClusterBasedJobCoordinator jc;
 
     @Override
     public void registerToDM() {
@@ -22,7 +22,7 @@ public class DMListenerRMI implements DMListener, Runnable {
     }
 
     @Override
-    public void setYarnApplicationMaster(YarnApplicationMaster jc) {
+    public void setYarnApplicationMaster(ClusterBasedJobCoordinator jc) {
         this.jc = jc;
     }
 

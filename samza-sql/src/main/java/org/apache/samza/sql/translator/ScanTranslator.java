@@ -21,50 +21,84 @@ package org.apache.samza.sql.translator;
 
 import java.util.List;
 import java.util.Map;
-
 import org.apache.calcite.rel.core.TableScan;
-import org.apache.calcite.rel.type.RelDataType;
 import org.apache.commons.lang.Validate;
+import org.apache.samza.application.descriptors.StreamApplicationDescriptor;
+import org.apache.samza.context.Context;
+import org.apache.samza.system.descriptors.GenericInputDescriptor;
 import org.apache.samza.operators.KV;
 import org.apache.samza.operators.MessageStream;
-import org.apache.samza.operators.StreamGraph;
+import org.apache.samza.system.descriptors.DelegatingSystemDescriptor;
 import org.apache.samza.operators.functions.MapFunction;
+import org.apache.samza.serializers.KVSerde;
+import org.apache.samza.serializers.NoOpSerde;
 import org.apache.samza.sql.data.SamzaSqlRelMessage;
 import org.apache.samza.sql.interfaces.SamzaRelConverter;
-
-import com.google.common.base.Joiner;
-import org.apache.samza.system.SystemStream;
+import org.apache.samza.sql.interfaces.SqlIOConfig;
+import org.apache.samza.sql.runner.SamzaSqlApplicationContext;
 
 
 /**
  * Translator to translate the TableScans in relational graph to the corresponding input streams in the StreamGraph
  * implementation
  */
-public class ScanTranslator {
+class ScanTranslator {
 
-  private final Map<SystemStream, SamzaRelConverter> relMsgConverters;
+  private final Map<String, SamzaRelConverter> relMsgConverters;
+  private final Map<String, SqlIOConfig> systemStreamConfig;
+  private final int queryId;
 
-  public ScanTranslator(Map<SystemStream, SamzaRelConverter> converters) {
+  ScanTranslator(Map<String, SamzaRelConverter> converters, Map<String, SqlIOConfig> ssc, int queryId) {
     relMsgConverters = converters;
+    this.systemStreamConfig = ssc;
+    this.queryId = queryId;
   }
 
-  public void translate(final TableScan tableScan, final TranslatorContext context) {
-    StreamGraph streamGraph = context.getStreamGraph();
+  private static class ScanMapFunction implements MapFunction<KV<Object, Object>, SamzaSqlRelMessage> {
+    // All the user-supplied functions are expected to be serializable in order to enable full serialization of user
+    // DAG. We do not want to serialize samzaMsgConverter as it can be fully constructed during stream operator
+    // initialization.
+    private transient SamzaRelConverter msgConverter;
+    private final String streamName;
+    private final int queryId;
+
+    ScanMapFunction(String sourceStreamName, int queryId) {
+      this.streamName = sourceStreamName;
+      this.queryId = queryId;
+    }
+
+    @Override
+    public void init(Context context) {
+      TranslatorContext translatorContext =
+          ((SamzaSqlApplicationContext) context.getApplicationTaskContext()).getTranslatorContexts().get(queryId);
+      this.msgConverter = translatorContext.getMsgConverter(streamName);
+    }
+
+    @Override
+    public SamzaSqlRelMessage apply(KV<Object, Object> message) {
+      return this.msgConverter.convertToRelMessage(message);
+    }
+  }
+
+  void translate(final TableScan tableScan, final TranslatorContext context,
+      Map<String, DelegatingSystemDescriptor> systemDescriptors, Map<String, MessageStream<KV<Object, Object>>> inputMsgStreams) {
+    StreamApplicationDescriptor streamAppDesc = context.getStreamAppDescriptor();
     List<String> tableNameParts = tableScan.getTable().getQualifiedName();
-    Validate.isTrue(tableNameParts.size() == 2,
-        String.format("table name %s is not of the format <SystemName>.<StreamName>",
-            Joiner.on(".").join(tableNameParts)));
+    String sourceName = SqlIOConfig.getSourceFromSourceParts(tableNameParts);
 
-    String streamName = tableNameParts.get(1);
-    String systemName = tableNameParts.get(0);
-    SystemStream systemStream = new SystemStream(systemName, streamName);
+    Validate.isTrue(relMsgConverters.containsKey(sourceName), String.format("Unknown source %s", sourceName));
+    SqlIOConfig sqlIOConfig = systemStreamConfig.get(sourceName);
+    final String systemName = sqlIOConfig.getSystemName();
+    final String streamName = sqlIOConfig.getStreamName();
+    final String source = sqlIOConfig.getSource();
 
-    Validate.isTrue(relMsgConverters.containsKey(systemStream), String.format("Unknown system %s", systemName));
-    SamzaRelConverter converter = relMsgConverters.get(systemStream);
+    KVSerde<Object, Object> noOpKVSerde = KVSerde.of(new NoOpSerde<>(), new NoOpSerde<>());
+    DelegatingSystemDescriptor
+        sd = systemDescriptors.computeIfAbsent(systemName, DelegatingSystemDescriptor::new);
+    GenericInputDescriptor<KV<Object, Object>> isd = sd.getInputDescriptor(streamName, noOpKVSerde);
 
-    MessageStream<KV<Object, Object>> inputStream = streamGraph.getInputStream(streamName);
-    MessageStream<SamzaSqlRelMessage> samzaSqlRelMessageStream = inputStream.map(converter::convertToRelMessage);
-
+    MessageStream<KV<Object, Object>> inputStream = inputMsgStreams.computeIfAbsent(source, v -> streamAppDesc.getInputStream(isd));
+    MessageStream<SamzaSqlRelMessage> samzaSqlRelMessageStream = inputStream.map(new ScanMapFunction(sourceName, queryId));
     context.registerMessageStream(tableScan.getId(), samzaSqlRelMessageStream);
   }
 }

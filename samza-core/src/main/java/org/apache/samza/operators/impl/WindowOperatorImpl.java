@@ -21,12 +21,13 @@
 package org.apache.samza.operators.impl;
 
 import com.google.common.base.Preconditions;
-import org.apache.samza.config.Config;
+import org.apache.samza.context.Context;
 import org.apache.samza.operators.functions.FoldLeftFunction;
+import org.apache.samza.operators.functions.MapFunction;
+import org.apache.samza.operators.functions.SupplierFunction;
 import org.apache.samza.operators.impl.store.TimeSeriesKey;
 import org.apache.samza.operators.impl.store.TimeSeriesStore;
 import org.apache.samza.operators.impl.store.TimeSeriesStoreImpl;
-import org.apache.samza.operators.impl.store.TimestampedValue;
 import org.apache.samza.operators.spec.OperatorSpec;
 import org.apache.samza.operators.spec.WindowOperatorSpec;
 import org.apache.samza.operators.triggers.FiringType;
@@ -43,9 +44,9 @@ import org.apache.samza.operators.windows.internal.WindowType;
 import org.apache.samza.storage.kv.ClosableIterator;
 import org.apache.samza.storage.kv.KeyValueStore;
 import org.apache.samza.task.MessageCollector;
-import org.apache.samza.task.TaskContext;
 import org.apache.samza.task.TaskCoordinator;
 import org.apache.samza.util.Clock;
+import org.apache.samza.util.TimestampedValue;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -58,8 +59,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.function.Function;
-import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 /**
@@ -93,8 +92,8 @@ public class WindowOperatorImpl<M, K> extends OperatorImpl<M, WindowPane<K, Obje
   private final Clock clock;
   private final WindowInternal<M, K, Object> window;
   private final FoldLeftFunction<M, Object> foldLeftFn;
-  private final Supplier<Object> initializer;
-  private final Function<M, K> keyFn;
+  private final SupplierFunction<Object> initializer;
+  private final MapFunction<M, K> keyFn;
 
   private final TriggerScheduler<K> triggerScheduler;
   private final Map<TriggerKey<K>, TriggerImplHandler> triggers = new HashMap<>();
@@ -111,16 +110,23 @@ public class WindowOperatorImpl<M, K> extends OperatorImpl<M, WindowPane<K, Obje
   }
 
   @Override
-  protected void handleInit(Config config, TaskContext context) {
-    WindowInternal<M, K, Object> window = windowOpSpec.getWindow();
+  protected void handleInit(Context context) {
 
     KeyValueStore<TimeSeriesKey<K>, Object> store =
-        (KeyValueStore<TimeSeriesKey<K>, Object>) context.getStore(windowOpSpec.getOpId());
+        (KeyValueStore<TimeSeriesKey<K>, Object>) context.getTaskContext().getStore(windowOpSpec.getOpId());
+
+    if (initializer != null) {
+      initializer.init(context);
+    }
+
+    if (keyFn != null) {
+      keyFn.init(context);
+    }
 
     // For aggregating windows, we use the store in over-write mode since we only retain the aggregated
     // value. Else, we use the store in append-mode.
     if (foldLeftFn != null) {
-      foldLeftFn.init(config, context);
+      foldLeftFn.init(context);
       timeSeriesStore = new TimeSeriesStoreImpl(store, false);
     } else {
       timeSeriesStore = new TimeSeriesStoreImpl(store, true);
@@ -176,7 +182,7 @@ public class WindowOperatorImpl<M, K> extends OperatorImpl<M, WindowPane<K, Obje
 
   @Override
   public Collection<WindowPane<K, Object>> handleTimer(MessageCollector collector, TaskCoordinator coordinator) {
-    LOG.trace("Processing timer.");
+    LOG.trace("Processing time triggers");
     List<WindowPane<K, Object>> results = new ArrayList<>();
     List<TriggerKey<K>> keys = triggerScheduler.runPendingCallbacks();
 
@@ -214,6 +220,12 @@ public class WindowOperatorImpl<M, K> extends OperatorImpl<M, WindowPane<K, Obje
     }
     if (timeSeriesStore != null) {
       timeSeriesStore.close();
+    }
+    if (initializer != null) {
+      initializer.close();
+    }
+    if (keyFn != null) {
+      keyFn.close();
     }
   }
 
@@ -367,15 +379,15 @@ public class WindowOperatorImpl<M, K> extends OperatorImpl<M, WindowPane<K, Obje
    * @return a list of all elements returned by the iterator
    */
   static <V>  List<V> toList(ClosableIterator<V> iterator) {
+    Preconditions.checkNotNull(iterator);
+
     List<V> values = new ArrayList<>();
     try {
       while (iterator.hasNext()) {
         values.add(iterator.next());
       }
     } finally {
-      if (iterator != null) {
         iterator.close();
-      }
     }
     return Collections.unmodifiableList(values);
   }
