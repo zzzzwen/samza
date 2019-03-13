@@ -105,10 +105,12 @@ public class DefaultScheduler implements DMScheduler {
                 stages.put(report.getName(), new Stage());
             }
             Stage curr = stages.get(report.getName());
-            curr.setRunningContainers(report.getRunningContainers());
+            if (report.getRunningContainers() != 0) curr.setRunningContainers(report.getRunningContainers());
+            stages.put(report.getName(), curr);
             this.dispatcher.updateEnforcerURL(report.getName(), report.getHost()+ ":1999");
         } else if (report.getType().contains("TaskName-Partition")) {
             Stage curr = stages.get(report.getName());
+            System.out.println("Throughput:" + report.getThroughput() + "  " + "runningcontainers: " + curr.getRunningContainers());
             if (report.getThroughput() > 5 && curr.getRunningContainers() == 1) {
                 LOG.info("Requesting scaling of containers");
 //                this.dispatcher.enforceSchema(new Allocation(report.getName(), stages.get(report.getName()).getRunningContainers() +1));
