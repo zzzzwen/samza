@@ -21,6 +21,8 @@ public class DefaultScheduler implements DMScheduler {
 
     private DMDispatcher dispatcher;
 
+    private DMSchedulingPolicy policy = new DefaultSchedulingPolicy();
+
     @Override
     public void init(Config config, DMSchedulerConfig schedulerConfig) {
         this.config = config;
@@ -111,11 +113,16 @@ public class DefaultScheduler implements DMScheduler {
         } else if (report.getType().contains("TaskName-Partition")) {
             Stage curr = stages.get(report.getName());
             System.out.println("Throughput:" + report.getThroughput() + "  " + "runningcontainers: " + curr.getRunningContainers());
-            if (report.getThroughput() > 5 && curr.getRunningContainers() == 1) {
-                LOG.info("Requesting scaling of containers");
-//                this.dispatcher.enforceSchema(new Allocation(report.getName(), stages.get(report.getName()).getRunningContainers() +1));
-                this.dispatcher.enforceSchema(new Allocation(report.getName(), 1));
+
+            Allocation result = this.policy.allocate(curr, report);
+            if (result.getParallelism() != 0) {
+                this.dispatcher.enforceSchema(result);
             }
+//            if (report.getThroughput() > 5 && curr.getRunningContainers() == 1) {
+//                LOG.info("Requesting scaling of containers");
+////                this.dispatcher.enforceSchema(new Allocation(report.getName(), stages.get(report.getName()).getRunningContainers() +1));
+//                this.dispatcher.enforceSchema(new Allocation(report.getName(), 1));
+//            }
 
         }
 
