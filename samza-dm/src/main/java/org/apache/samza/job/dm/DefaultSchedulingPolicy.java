@@ -8,7 +8,7 @@ public class DefaultSchedulingPolicy implements DMSchedulingPolicy {
 
     @Override
     public Allocation allocate(Stage curr, StageReport report) {
-        if (report.getThroughput() > 5 && curr.getRunningContainers() == 1) {
+        if (report.getThroughput() > 160 && curr.getRunningContainers() == 1) {
             LOG.info("Requesting scaling of containers");
             return new Allocation(report.getName(), 1);
         }

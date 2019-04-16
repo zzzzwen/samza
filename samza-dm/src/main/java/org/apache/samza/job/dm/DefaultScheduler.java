@@ -23,6 +23,10 @@ public class DefaultScheduler implements DMScheduler {
 
     private DMSchedulingPolicy policy = new DefaultSchedulingPolicy();
 
+    private int prev = -1;
+    private boolean scaled = false;
+    private long prevTime = -1;
+
     @Override
     public void init(Config config, DMSchedulerConfig schedulerConfig) {
         this.config = config;
@@ -111,18 +115,27 @@ public class DefaultScheduler implements DMScheduler {
             stages.put(report.getName(), curr);
             this.dispatcher.updateEnforcerURL(report.getName(), report.getHost()+ ":1999");
         } else if (report.getType().contains("TaskName-Partition")) {
-            Stage curr = stages.get(report.getName());
-            System.out.println("Throughput:" + report.getThroughput() + "  " + "runningcontainers: " + curr.getRunningContainers());
 
-            Allocation result = this.policy.allocate(curr, report);
-            if (result.getParallelism() != 0) {
-                this.dispatcher.enforceSchema(result);
+            long timeDiff = prevTime == -1 ? prev : report.getTime() - prevTime;
+            if (timeDiff > 100) {
+                Stage curr = stages.get(report.getName());
+
+                int temp = report.getThroughput();
+                if (prev != -1) {
+                    report.setThroughput((report.getThroughput() - prev) / 5);
+                }
+
+                System.out.println("Throughput:" + report.getThroughput() + "  " + "runningcontainers: " + curr.getRunningContainers());
+
+                prev = temp;
+                Allocation result = this.policy.allocate(curr, report);
+                if (result.getParallelism() != 0 && !scaled) {
+                    this.dispatcher.enforceSchema(result);
+                    this.scaled = true;
+                }
             }
-//            if (report.getThroughput() > 5 && curr.getRunningContainers() == 1) {
-//                LOG.info("Requesting scaling of containers");
-////                this.dispatcher.enforceSchema(new Allocation(report.getName(), stages.get(report.getName()).getRunningContainers() +1));
-//                this.dispatcher.enforceSchema(new Allocation(report.getName(), 1));
-//            }
+
+            prevTime = report.getTime();
 
         }
 
