@@ -209,7 +209,8 @@ public class YarnApplicationMaster {
     void scaleUpByN(int numContainer){
         for (int i = 0; i< numContainer; i++){
             JobModel jobModel = jobModelManager.jobModel();
-            scaleUpByOne(jobModel);
+            jobModel = scaleUpByOne(jobModel);
+            leaderJobCoordinator.publishJobModel(jobModel);
         }
 
     };
